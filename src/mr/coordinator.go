@@ -76,12 +76,16 @@ func (c *Coordinator) GetTask(args *GetTaskArgs, reply *GetTaskReply) error {
 	gob.Register(ReduceTask{})
 
 	// check for unstarted map tasks
+	fmt.Println("No. of map tasks remaining:", c.RemainingMapTasks)
+	fmt.Println("No. of reduce tasks remaining:", c.RemainingReduceTasks)
 	if c.RemainingMapTasks != 0 {
 		for _, mapTask := range c.MapTasks {
 			if mapTask.Status == IDLE {
+				mapTask.Status = IN_PROGRESS
 				fmt.Printf("Coordinator: assigning map task: %v\n", mapTask.InputFile)
 				mapTask.Assign(args.WorkerID)
 				*reply = mapTask
+				c.RemainingMapTasks -= 1
 				break
 			}
 		}
@@ -92,9 +96,11 @@ func (c *Coordinator) GetTask(args *GetTaskArgs, reply *GetTaskReply) error {
 	if c.RemainingReduceTasks != 0 {
 		for _, reduceTask := range c.ReduceTasks {
 			if reduceTask.Status == IDLE {
+				reduceTask.Status = IN_PROGRESS
 				fmt.Printf("Coordinator: assigning reduce task: %v\n", reduceTask.Region)
 				reduceTask.Assign(args.WorkerID)
 				*reply = reduceTask
+				c.RemainingReduceTasks -= 1
 				break
 			}
 		}

@@ -12,8 +12,9 @@ import (
 	"net/rpc"
 	"os"
 	"sort"
-	"strconv"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // Map functions return a slice of KeyValue.
@@ -48,7 +49,7 @@ func (a ByKey) Less(i, j int) bool { return a[i].Key < a[j].Key }
 // main/mrworker.go calls this function.
 func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string) string) {
 	// Setting up worker server
-	workerID := strconv.Itoa(os.Getuid())
+	workerID := uuid.New().String()[:6]
 	workerObj := WorkerClass{
 		WorkerID:        workerID,
 		RegionToKVPairs: make(map[int][]KeyValue),
@@ -66,6 +67,7 @@ func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string)
 			fmt.Printf("Processing map task: %v\n", task)
 			ok = workerObj.handleMapTask(mapf, task.InputFile, task.NReduce)
 		case ReduceTask:
+			fmt.Printf("Processing reduce task: %v\n", task)
 			ok = workerObj.handleReduceTask(reducef, task.Region, task.Locations)
 		default:
 			fmt.Printf("Unknown task type %T, terminating program.\n", task)
@@ -167,7 +169,7 @@ func (w *WorkerClass) handleReduceTask(reducef func(string, []string) string, re
 	file, err := os.Open(intermediateFileName)
 
 	if err != nil {
-		log.Fatalf("error occured while opening %v file", intermediateFileName)
+		log.Fatalf("error occured while opening %v file, Error:%v", intermediateFileName, err)
 	}
 
 	var listOfKeyValue []KeyValue
