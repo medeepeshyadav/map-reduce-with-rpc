@@ -2,7 +2,6 @@ package mr
 
 import (
 	"encoding/gob"
-	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -76,13 +75,11 @@ func (c *Coordinator) GetTask(args *GetTaskArgs, reply *GetTaskReply) error {
 	gob.Register(ReduceTask{})
 
 	// check for unstarted map tasks
-	fmt.Println("No. of map tasks remaining:", c.RemainingMapTasks)
-	fmt.Println("No. of reduce tasks remaining:", c.RemainingReduceTasks)
 	if c.RemainingMapTasks != 0 {
 		for _, mapTask := range c.MapTasks {
 			if mapTask.Status == IDLE {
 				mapTask.Status = IN_PROGRESS
-				fmt.Printf("Coordinator: assigning map task: %v\n", mapTask.InputFile)
+				// fmt.Printf("Coordinator: assigning map task: %v\n", mapTask.InputFile)
 				mapTask.Assign(args.WorkerID)
 				*reply = mapTask
 				c.RemainingMapTasks -= 1
@@ -97,7 +94,7 @@ func (c *Coordinator) GetTask(args *GetTaskArgs, reply *GetTaskReply) error {
 		for _, reduceTask := range c.ReduceTasks {
 			if reduceTask.Status == IDLE {
 				reduceTask.Status = IN_PROGRESS
-				fmt.Printf("Coordinator: assigning reduce task: %v\n", reduceTask.Region)
+				// fmt.Printf("Coordinator: assigning reduce task: %v\n", reduceTask.Region)
 				reduceTask.Assign(args.WorkerID)
 				*reply = reduceTask
 				c.RemainingReduceTasks -= 1
@@ -108,7 +105,7 @@ func (c *Coordinator) GetTask(args *GetTaskArgs, reply *GetTaskReply) error {
 	}
 
 	// no more tasks
-	fmt.Println("Coordinator: No idle task found")
+	// fmt.Println("Coordinator: No idle task found")
 	reply = nil
 	return nil
 }
@@ -150,15 +147,12 @@ func MakeCoordinator(files []string, nReduce int) *Coordinator {
 	// Initialize reduce task
 	for i := 0; i < nReduce; i++ {
 		c.ReduceTasks[i] = &ReduceTask{
-			Region: nReduce + 1,
+			Region: i + 1,
 			Task: Task{
 				Status: IDLE,
 			},
 		}
 	}
-
-	fmt.Printf("Coordinator initialized with %v Map Tasks\n", len(files))
-	fmt.Printf("Coordinator initialized with %v Reduce Tasks\n", nReduce)
 
 	c.server()
 	return &c

@@ -7,12 +7,9 @@ import (
 	"hash/fnv"
 	"io"
 	"log"
-	"net"
-	"net/http"
 	"net/rpc"
 	"os"
 	"sort"
-	"time"
 
 	"github.com/google/uuid"
 )
@@ -54,7 +51,6 @@ func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string)
 		WorkerID:        workerID,
 		RegionToKVPairs: make(map[int][]KeyValue),
 	}
-	// workerObj.server()
 	gob.Register(MapTask{})
 	gob.Register(ReduceTask{})
 	args := GetTaskArgs{WorkerID: workerID}
@@ -64,16 +60,16 @@ func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string)
 	for ok && reply != nil {
 		switch task := (*reply).(type) {
 		case MapTask:
-			fmt.Printf("Processing map task: %v\n", task)
+			// fmt.Printf("Processing map task: %v\n", task)
 			ok = workerObj.handleMapTask(mapf, task.InputFile, task.NReduce)
 		case ReduceTask:
-			fmt.Printf("Processing reduce task: %v\n", task)
+			// fmt.Printf("Processing reduce task: %v\n", task)
 			ok = workerObj.handleReduceTask(reducef, task.Region, task.Locations)
 		default:
-			fmt.Printf("Unknown task type %T, terminating program.\n", task)
+			// fmt.Printf("Unknown task type %T, terminating program.\n", task)
 			ok = false
 		}
-		time.Sleep(2 * time.Second)
+		// time.Sleep(2 * time.Second)
 		ok = call(coordinatorSock(), "Coordinator.GetTask", &args, &reply)
 	}
 
@@ -102,20 +98,6 @@ func call(sockName string, rpcname string, args interface{}, reply interface{}) 
 // builds a unique sockname using the worker id
 func (w *WorkerClass) Sockname() string {
 	return fmt.Sprintf("/var/tmp/5840-mr-%v", w.WorkerID)
-}
-
-// starts a thread for communication among workers
-func (w *WorkerClass) server() {
-	rpc.Register(w)
-	rpc.HandleHTTP()
-	//l, e := net.Listen("tcp", ":1234")
-	sockname := w.Sockname()
-	os.Remove(sockname)
-	l, e := net.Listen("unix", sockname)
-	if e != nil {
-		log.Fatal("listen error:", e)
-	}
-	go http.Serve(l, nil)
 }
 
 // handles map tasks
@@ -185,7 +167,7 @@ func (w *WorkerClass) handleReduceTask(reducef func(string, []string) string, re
 
 	sort.Sort(ByKey(listOfKeyValue))
 
-	oname := "mr-out-X"
+	oname := fmt.Sprintf("mr-out-%d", region)
 	ofile, err := os.Open(oname)
 	if os.IsNotExist(err) {
 		ofile, _ = os.Create(oname)
