@@ -113,6 +113,8 @@ func (c *Coordinator) GetTask(args *GetTaskArgs, reply *GetTaskReply) error {
 // main/mrcoordinator.go calls Done() periodically to find out
 // if the entire job has finished.
 func (c *Coordinator) Done() bool {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
 	ret := false
 	if c.RemainingMapTasks == 0 && c.RemainingReduceTasks == 0 {
 		ret = true

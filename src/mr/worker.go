@@ -57,16 +57,16 @@ func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string)
 	reply := new(MapReduceTaskReply)
 	// initial call to coordinator GetTask method
 	ok := call(coordinatorSock(), "Coordinator.GetTask", &args, &reply)
-	for ok && reply != nil {
+	for ok && *reply != nil {
 		switch task := (*reply).(type) {
 		case MapTask:
-			// fmt.Printf("Processing map task: %v\n", task)
+			fmt.Printf("Processing map task: %v\n", task)
 			ok = workerObj.handleMapTask(mapf, task.InputFile, task.NReduce)
 		case ReduceTask:
-			// fmt.Printf("Processing reduce task: %v\n", task)
+			fmt.Printf("Processing reduce task: %v\n", task)
 			ok = workerObj.handleReduceTask(reducef, task.Region, task.Locations)
 		default:
-			// fmt.Printf("Unknown task type %T, terminating program.\n", task)
+			fmt.Printf("Unknown task type %T, terminating program.\n", task)
 			ok = false
 		}
 		// time.Sleep(2 * time.Second)
@@ -196,5 +196,6 @@ func (w *WorkerClass) handleReduceTask(reducef func(string, []string) string, re
 	}
 
 	ofile.Close()
+	file.Close()
 	return true
 }
