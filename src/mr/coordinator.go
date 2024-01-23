@@ -23,6 +23,7 @@ type Coordinator struct {
 	ReduceTasks          []*ReduceTask
 	RemainingMapTasks    int
 	RemainingReduceTasks int
+	Locations            []string
 	mutex                sync.Mutex
 }
 
@@ -64,6 +65,15 @@ func (c *Coordinator) server() {
 	go http.Serve(l, nil)
 }
 
+func (c *Coordinator) doesContain(workerId string) bool {
+	for _, loc := range c.Locations {
+		if loc == workerId {
+			return true
+		}
+	}
+	return false
+}
+
 // Your code here -- RPC handlers for the worker to call.
 // an example RPC handler.
 //
@@ -76,13 +86,15 @@ func (c *Coordinator) GetTask(args *GetTaskArgs, reply *GetTaskReply) error {
 
 	// check for unstarted map tasks
 	if c.RemainingMapTasks != 0 {
+		if !c.doesContain(args.WorkerID) {
+			c.Locations = append(c.Locations, args.WorkerID)
+		}
+
 		for _, mapTask := range c.MapTasks {
 			if mapTask.Status == IDLE {
-				mapTask.Status = IN_PROGRESS
 				// fmt.Printf("Coordinator: assigning map task: %v\n", mapTask.InputFile)
 				mapTask.Assign(args.WorkerID)
 				*reply = mapTask
-				c.RemainingMapTasks -= 1
 				break
 			}
 		}
@@ -92,8 +104,10 @@ func (c *Coordinator) GetTask(args *GetTaskArgs, reply *GetTaskReply) error {
 	// check for unstarted reduce tasks
 	if c.RemainingReduceTasks != 0 {
 		for _, reduceTask := range c.ReduceTasks {
+			reduceTask.Locations = c.Locations
+			// fmt.Println("C.Location:==", c.Locations)
+			// fmt.Println("R.Locations:==", reduceTask.Locations)
 			if reduceTask.Status == IDLE {
-				reduceTask.Status = IN_PROGRESS
 				// fmt.Printf("Coordinator: assigning reduce task: %v\n", reduceTask.Region)
 				reduceTask.Assign(args.WorkerID)
 				*reply = reduceTask
@@ -107,6 +121,13 @@ func (c *Coordinator) GetTask(args *GetTaskArgs, reply *GetTaskReply) error {
 	// no more tasks
 	// fmt.Println("Coordinator: No idle task found")
 	reply = nil
+	return nil
+}
+
+func (c *Coordinator) MarkTaskDone(args *TaskDoneArgs, reply *TaskDoneReply) error {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	c.RemainingMapTasks -= 1
 	return nil
 }
 
@@ -129,6 +150,7 @@ func MakeCoordinator(files []string, nReduce int) *Coordinator {
 	c := Coordinator{
 		MapTasks:             make([]*MapTask, len(files)),
 		ReduceTasks:          make([]*ReduceTask, nReduce),
+		Locations:            []string{},
 		RemainingMapTasks:    len(files),
 		RemainingReduceTasks: nReduce,
 		mutex:                sync.Mutex{},

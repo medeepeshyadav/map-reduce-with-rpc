@@ -60,10 +60,12 @@ func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string)
 	for ok && *reply != nil {
 		switch task := (*reply).(type) {
 		case MapTask:
-			fmt.Printf("Processing map task: %v\n", task)
+			// fmt.Printf("Processing map task: %v\n", task)
 			ok = workerObj.handleMapTask(mapf, task.InputFile, task.NReduce)
+			call(coordinatorSock(), "Coordinator.MarkTaskDone", &TaskDoneArgs{}, &TaskDoneReply{})
+
 		case ReduceTask:
-			fmt.Printf("Processing reduce task: %v\n", task)
+			// fmt.Printf("Processing reduce task: %v\n", task)
 			ok = workerObj.handleReduceTask(reducef, task.Region, task.Locations)
 		default:
 			fmt.Printf("Unknown task type %T, terminating program.\n", task)
@@ -127,6 +129,7 @@ func (w *WorkerClass) handleMapTask(mapf func(string, string) []KeyValue, fileNa
 	for region, intermediateKVPairs := range w.RegionToKVPairs {
 		intermediateFileName := fmt.Sprintf("%v-%d", w.WorkerID, region)
 		intermediateFile, err := os.Create(intermediateFileName)
+		// w.Locations[region] = append(w.Locations[region], w.WorkerID)
 
 		if err != nil {
 			log.Fatalf("could not create %v", intermediateFileName)
@@ -147,31 +150,32 @@ func (w *WorkerClass) handleMapTask(mapf func(string, string) []KeyValue, fileNa
 
 // handles reduce task
 func (w *WorkerClass) handleReduceTask(reducef func(string, []string) string, region int, locations []string) bool {
-	intermediateFileName := fmt.Sprintf("%v-%d", w.WorkerID, region)
-	file, err := os.Open(intermediateFileName)
-
-	if err != nil {
-		log.Fatalf("error occured while opening %v file, Error:%v", intermediateFileName, err)
-	}
-
-	var listOfKeyValue []KeyValue
-
-	dec := json.NewDecoder(file)
-	for {
-		var kv KeyValue
-		if err := dec.Decode(&kv); err != nil {
-			break
-		}
-		listOfKeyValue = append(listOfKeyValue, kv)
-	}
-
-	sort.Sort(ByKey(listOfKeyValue))
-
 	oname := fmt.Sprintf("mr-out-%d", region)
 	ofile, err := os.Open(oname)
 	if os.IsNotExist(err) {
 		ofile, _ = os.Create(oname)
 	}
+	var listOfKeyValue []KeyValue
+	for _, workerID := range locations {
+		intermediateFileName := fmt.Sprintf("%v-%d", workerID, region)
+		file, err := os.Open(intermediateFileName)
+
+		if err != nil {
+			log.Fatalf("error occured while opening %v file, Error:%v", intermediateFileName, err)
+		}
+
+		dec := json.NewDecoder(file)
+		for {
+			var kv KeyValue
+			if err := dec.Decode(&kv); err != nil {
+				break
+			}
+			listOfKeyValue = append(listOfKeyValue, kv)
+		}
+
+		file.Close()
+	}
+	sort.Sort(ByKey(listOfKeyValue))
 
 	//
 	// call Reduce on each distinct key in listOfKeyValue[],
@@ -194,8 +198,6 @@ func (w *WorkerClass) handleReduceTask(reducef func(string, []string) string, re
 
 		i = j
 	}
-
 	ofile.Close()
-	file.Close()
 	return true
 }
